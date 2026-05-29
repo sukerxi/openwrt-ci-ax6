@@ -19,7 +19,9 @@ env:
 jobs:
   Build:
     runs-on: ubuntu-24.04
-
+    permissions:
+      contents: write       # 允许创建/更新 Release、上传附件
+      packages: write       # (可选) 如果需要发布容器镜像
     steps:
     - name: Check Server Performance(检查服务器性能)
       run: |
