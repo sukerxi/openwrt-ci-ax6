@@ -1,0 +1,122 @@
+name: Custom Build anaxirs6s
+
+on:
+  workflow_dispatch:
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      # ✅ 直接从上游拉取最新代码
+      - name: Checkout upstream repo
+        uses: actions/checkout@v4
+        with:
+          repository: wushuo894/ani-rss
+          fetch-depth: 0
+
+      # 🔧 在内存中应用补丁（不污染任何仓库历史）
+      - name: Apply Custom Patches
+        run: |
+          echo "🔧 正在应用自定义修改..."
+          
+          # 1. 替换 AfdianUtil.java (注意保持原始缩进)
+          cat > ani-rss-application/src/main/java/ani/rss/util/other/AfdianUtil.java << 'JAVAEOF'
+          package ani.rss.util.other;
+
+          import ani.rss.commons.GsonStatic;
+          import ani.rss.entity.Config;
+          import ani.rss.entity.web.Result;
+          import ani.rss.util.basic.HttpReq;
+          import cn.hutool.core.lang.Assert;
+          import com.google.gson.JsonObject;
+          import lombok.extern.slf4j.Slf4j;
+
+          import java.util.Date;
+
+          @Slf4j
+          public class AfdianUtil {
+              public static Result<Void> verifyNo(String no) {
+                  Assert.notBlank(no, "订单号为空");
+                  return HttpReq.post("https://afdian.wushuo.top?out_trade_no=" + no)
+                          .timeout(1000 * 5)
+                          .thenFunction(res -> {
+                              HttpReq.assertStatus(res);
+                              Result<Void> result = new Result<>();
+                              JsonObject jsonObject = GsonStatic.fromJson(res.body(), JsonObject.class);
+                              result.setMessage(jsonObject.get("message").getAsString());
+                              result.setCode(jsonObject.get("code").getAsInt());
+                              return result;
+                          });
+              }
+
+              public static Boolean verifyExpirationTime() {
+                  return true;
+              }
+          }
+          JAVAEOF
+          echo "✅ AfdianUtil.java 已替换"
+
+          # 2. 清空 arm32v7 Dockerfile
+          > docker/Dockerfile-arm32v7
+          echo "✅ Dockerfile-arm32v7 已清空"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: |
+          bash ./package.sh
+          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f pom.xml)
+          echo "version=v$version" >> $GITHUB_ENV
+
+      # ✅ 在当前公有仓库创建 Release
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ env.version }}
+          body_path: UPDATE.md
+          tag_name: ${{ env.version }}
+          append_body: false
+          files: |
+            ./ani-rss-application/target/ani-rss.jar
+            ./ani-rss-application/target/ani-rss.exe
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ✅ 推送到当前仓库关联的 GHCR
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker Meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ env.version }}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
