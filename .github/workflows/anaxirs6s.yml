@@ -79,16 +79,16 @@ jobs:
           echo "version=v$version" >> $GITHUB_ENV
 
       # ✅ 在当前公有仓库创建 Release
-      - name: Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ env.version }}
-          body_path: UPDATE.md
-          tag_name: ${{ env.version }}
-          append_body: false
-          files: |
-            ./ani-rss-application/target/ani-rss.jar
-            ./ani-rss-application/target/ani-rss.exe
+      # - name: Release
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     name: ${{ env.version }}
+      #     body_path: UPDATE.md
+      #     tag_name: ${{ env.version }}
+      #     append_body: false
+      #     files: |
+      #       ./ani-rss-application/target/ani-rss.jar
+      #       ./ani-rss-application/target/ani-rss.exe
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
