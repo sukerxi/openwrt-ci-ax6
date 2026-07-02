@@ -3,7 +3,7 @@ name: Custom Build anaxirs6s
 on:
   # ✅ 每天北京时间 10:00, 15:00, 20:00 各执行一次
   schedule:
-    - cron: '0 2,7,12 * * *'
+    - cron: '30 2,7,12 * * *'
   # ✅ 保留手动触发功能
   workflow_dispatch:
 
