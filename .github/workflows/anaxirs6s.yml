@@ -1,8 +1,11 @@
 name: Custom Build anaxirs6s
 
 on:
+  # ✅ 每天北京时间 10:00, 15:00, 20:00 各执行一次
+  schedule:
+    - cron: '0 2,7,12 * * *'
+  # ✅ 保留手动触发功能
   workflow_dispatch:
-
 
 jobs:
   build:
@@ -12,6 +15,16 @@ jobs:
       packages: write
 
     steps:
+      # 🧹 清理旧的 Docker 镜像，只保留最近 10 个版本
+      - name: Cleanup old package versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: container
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: false
+        continue-on-error: true
+
       # ✅ 直接从上游拉取最新代码
       - name: Checkout upstream repo
         uses: actions/checkout@v4
@@ -77,18 +90,6 @@ jobs:
           bash ./package.sh
           version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout -f pom.xml)
           echo "version=v$version" >> $GITHUB_ENV
-
-      # ✅ 在当前公有仓库创建 Release
-      # - name: Release
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     name: ${{ env.version }}
-      #     body_path: UPDATE.md
-      #     tag_name: ${{ env.version }}
-      #     append_body: false
-      #     files: |
-      #       ./ani-rss-application/target/ani-rss.jar
-      #       ./ani-rss-application/target/ani-rss.exe
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
