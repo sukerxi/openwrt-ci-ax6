@@ -39,13 +39,23 @@ jobs:
           CONFIG_FILE="defconfig/low-mem-512m/mt7987-mt7992-be7200.config"
           if [ ! -f "$CONFIG_FILE" ]; then
             echo "❌ Config file not found: $CONFIG_FILE"
-            echo "📂 Available configs:"
             find defconfig/ -name "*.config" || true
             exit 1
           fi
+
+          # ✅ 替换 EPAELNA 为 IPAILNA
+          sed -i 's/CONFIG_MTK_WIFI7_SECOND_IF_EPAELNA=y/CONFIG_MTK_WIFI7_SECOND_IF_IPAILNA=y/g' "$CONFIG_FILE"
+          echo "🔧 Patched: EPAELNA → IPAILNA"
+
           cp -f "$CONFIG_FILE" .config
-          echo "✅ Successfully loaded $CONFIG_FILE"
           make defconfig
+
+          # 验证修改是否生效
+          if grep -q "CONFIG_MTK_WIFI7_SECOND_IF_IPAILNA=y" .config; then
+            echo "✅ Verified: IPAILNA is set in .config"
+          else
+            echo "❌ Warning: IPAILNA not found in final .config, may have been overridden by defconfig"
+          fi
 
       - name: Compile Firmware
         run: |
