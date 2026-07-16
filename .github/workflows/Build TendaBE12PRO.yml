@@ -1,0 +1,97 @@
+name: Build TendaBE12PRO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout ImmortalWrt Source (25.12-dev-wifi7)
+        uses: actions/checkout@v4
+        with:
+          repository: chasey-dev/immortalwrt-mt798x-rebase
+          ref: 25.12-dev-wifi7
+          fetch-depth: 0
+
+      # 如果你有自己的 defconfig 文件在另一个仓库，需要额外 checkout 或下载
+      # 如果 defconfig 就在上述源码仓库中，则无需此步骤
+      # - name: Checkout Custom Configs
+      #   uses: actions/checkout@v4
+      #   with:
+      #     repository: YOUR_USERNAME/YOUR_CONFIG_REPO
+      #     path: custom-configs
+
+      - name: Initialize Build Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+          sudo timedatectl set-timezone "Asia/Shanghai"
+
+      - name: Update and Install Feeds
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Load Configuration
+        run: |
+          CONFIG_FILE="defconfig/low-mem-512m/mt7987-mt7992-be7200.config"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "❌ Config file not found: $CONFIG_FILE"
+            echo "📂 Available configs:"
+            find defconfig/ -name "*.config" || true
+            exit 1
+          fi
+          cp -f "$CONFIG_FILE" .config
+          echo "✅ Successfully loaded $CONFIG_FILE"
+          make defconfig
+
+      - name: Compile Firmware
+        run: |
+          make -j$(nproc) -s V=s
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-mt7987-be7200
+          path: bin/targets/mediatek/filogic/*.bin
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # ✅ 已移除 if 条件，所有触发方式都会执行发布
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-firmwares
+
+      - name: Flatten and Rename Files
+        run: |
+          mkdir -p final-release
+          for dir in all-firmwares/*/; do
+            for bin_file in "$dir"*.bin; do
+              [ -f "$bin_file" ] && cp "$bin_file" final-release/
+            done
+          done
+          echo "📦 Files to release:"
+          ls -lh final-release/
+
+      - name: Create Unified Release
+        uses: softprops/action-gh-release@v2
+        with:
+          make_latest: true
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.run_number) }}
+          files: final-release/*.bin
+          draft: false
+          body: |
+            ## 📦 ImmortalWrt MT7987 BE7200 固件
+            
+            - **源码**: `chasey-dev/immortalwrt-mt798x-rebase` @ `25.12-dev-wifi7`
+            - **配置**: `low-mem-512m / mt7987-mt7992-be7200`
+            - **构建时间**: ${{ github.event.head_commit.timestamp || 'N/A' }}
+            
+            > ⚠️ 非 Tag 触发的构建为开发版，请谨慎使用。
