@@ -19,7 +19,7 @@ jobs:
     with:
       repo_url: https://github.com/laipeng668/openwrt-6.x.git
       repo_branch: 25.12-nss
-      config_file: configs/IPQ807X.config
+      config_file: configs/ax6.config
       firmware_tag: IPQ807X
       kernel_file: kernel-6.12
       artifact_prefix: IPQ807X
