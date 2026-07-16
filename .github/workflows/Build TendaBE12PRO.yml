@@ -57,9 +57,46 @@ jobs:
             echo "❌ Warning: IPAILNA not found in final .config, may have been overridden by defconfig"
           fi
 
+
+
+
       - name: Compile Firmware
+        id: compile
+        timeout-minutes: 180
+        continue-on-error: true
         run: |
-          make -j$(nproc) -s V=s
+          # 1. 编译并将所有输出重定向到本地文件（不经过stdout，避免日志膨胀）
+          make -j$(nproc) V=s > build.log 2>&1
+          BUILD_EXIT_CODE=$?
+
+          # 2. ✅ 你提供的错误处理逻辑（完整嵌入此处）
+          if [ $BUILD_EXIT_CODE -ne 0 ]; then
+            echo "::error::❌ BUILD FAILED (Exit Code: $BUILD_EXIT_CODE)"
+            echo "=== Error Context ==="
+            
+            ERROR_LINES=$(grep -n -B3 -A3 -iE "error[: ]|fatal|cannot find|no such file|undefined reference|make\[[0-9]+\]: \*\*\*" build.log | head -n 200 || true)
+            
+            if [ -n "$ERROR_LINES" ]; then
+              echo "$ERROR_LINES"
+            else
+              echo "⚠️ No standard error keywords found. Printing last 100 lines of build.log:"
+              tail -n 100 build.log
+            fi
+            
+            exit $BUILD_EXIT_CODE
+          fi
+
+          # 3. 编译成功时的输出
+          echo "✅ Build completed successfully. Full log saved as artifact."
+          
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: build.log
+          retention-days: 7
+          compression-level: 9  # ✅ 最高压缩，进一步减小下载体积
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
