@@ -43,11 +43,16 @@ jobs:
             exit 1
           fi
 
-          # ✅ 替换 EPAELNA 为 IPAILNA (保留原有逻辑)
+          # ✅ 替换 EPAELNA 为 IPAILNA
           sed -i 's/CONFIG_MTK_WIFI7_SECOND_IF_EPAELNA=y/CONFIG_MTK_WIFI7_SECOND_IF_IPAILNA=y/g' "$CONFIG_FILE"
           echo "🔧 Patched: EPAELNA → IPAILNA"
 
           cp -f "$CONFIG_FILE" .config
+
+          # ✅ 删除 Routerich BE7200 相关配置（仅构建 Tenda BE12 PRO）
+          sed -i '/^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_routerich_be7200=/d' .config
+          sed -i '/^CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_routerich_be7200=/d' .config
+          echo "🗑️ Removed: Routerich BE7200 device configs"
 
           # ✅ 追加额外需要的软件包配置
           cat >> .config << EOF
@@ -61,16 +66,16 @@ jobs:
           EOF
           echo "📦 Appended extra packages to .config"
 
-          # ⚠️ 必须再次运行 defconfig 以解析依赖和验证新增选项
+          # ⚠️ 必须再次运行 defconfig 以解析依赖、移除无效选项并重新生成完整配置
           make defconfig
 
           # 验证关键修改是否生效
           echo "=== Verification ==="
           grep -q "CONFIG_MTK_WIFI7_SECOND_IF_IPAILNA=y" .config && echo "✅ IPAILNA is set" || echo "❌ IPAILNA missing"
-          grep -q "CONFIG_PACKAGE_kmod-wireguard=y" .config && echo "✅ WireGuard is set" || echo "❌ WireGuard missing"
+          grep -q "CONFIG_PACKAGE_kmod-wireguard=y" .config && echo "✅ WireGuard is set" || echo "⚠️ WireGuard kmod not found (may be built-in)"
           grep -q "CONFIG_PACKAGE_luci-app-ddns=y" .config && echo "✅ DDNS is set" || echo "❌ DDNS missing"
           grep -q "CONFIG_PACKAGE_luci-app-wol=y" .config && echo "✅ WoL is set" || echo "❌ WoL missing"
-
+          ! grep -q "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_routerich_be7200" .config && echo "✅ Routerich BE7200 removed" || echo "❌ Routerich BE7200 still present"
 
       - name: Compile Firmware
         id: compile
