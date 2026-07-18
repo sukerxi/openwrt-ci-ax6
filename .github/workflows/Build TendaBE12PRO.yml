@@ -43,21 +43,33 @@ jobs:
             exit 1
           fi
 
-          # ✅ 替换 EPAELNA 为 IPAILNA
+          # ✅ 替换 EPAELNA 为 IPAILNA (保留原有逻辑)
           sed -i 's/CONFIG_MTK_WIFI7_SECOND_IF_EPAELNA=y/CONFIG_MTK_WIFI7_SECOND_IF_IPAILNA=y/g' "$CONFIG_FILE"
           echo "🔧 Patched: EPAELNA → IPAILNA"
 
           cp -f "$CONFIG_FILE" .config
+
+          # ✅ 追加额外需要的软件包配置
+          cat >> .config << EOF
+          CONFIG_PACKAGE_kmod-wireguard=y
+          CONFIG_PACKAGE_luci-proto-wireguard=y
+          CONFIG_PACKAGE_luci-app-wol=y
+          CONFIG_PACKAGE_luci-i18n-wol-zh-cn=y
+          CONFIG_PACKAGE_luci-app-ddns=y
+          CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
+          CONFIG_PACKAGE_ddns-scripts-cloudflare=y
+          EOF
+          echo "📦 Appended extra packages to .config"
+
+          # ⚠️ 必须再次运行 defconfig 以解析依赖和验证新增选项
           make defconfig
 
-          # 验证修改是否生效
-          if grep -q "CONFIG_MTK_WIFI7_SECOND_IF_IPAILNA=y" .config; then
-            echo "✅ Verified: IPAILNA is set in .config"
-          else
-            echo "❌ Warning: IPAILNA not found in final .config, may have been overridden by defconfig"
-          fi
-
-
+          # 验证关键修改是否生效
+          echo "=== Verification ==="
+          grep -q "CONFIG_MTK_WIFI7_SECOND_IF_IPAILNA=y" .config && echo "✅ IPAILNA is set" || echo "❌ IPAILNA missing"
+          grep -q "CONFIG_PACKAGE_kmod-wireguard=y" .config && echo "✅ WireGuard is set" || echo "❌ WireGuard missing"
+          grep -q "CONFIG_PACKAGE_luci-app-ddns=y" .config && echo "✅ DDNS is set" || echo "❌ DDNS missing"
+          grep -q "CONFIG_PACKAGE_luci-app-wol=y" .config && echo "✅ WoL is set" || echo "❌ WoL missing"
 
 
       - name: Compile Firmware
