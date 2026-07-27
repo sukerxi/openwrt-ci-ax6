@@ -32,28 +32,53 @@ jobs:
           repository: wushuo894/ani-rss
           fetch-depth: 0
 
-      # 🔧 在内存中应用补丁（不污染任何仓库历史）
+          # 🔧 在内存中应用补丁（不污染任何仓库历史）
       - name: Apply Custom Patches
         run: |
           echo "🔧 正在应用自定义修改..."
           
-          # 1. 替换 AfdianUtil.java (注意保持原始缩进)
-          cat > ani-rss-application/src/main/java/ani/rss/util/other/AfdianUtil.java << 'JAVAEOF'
-          package ani.rss.util.other;
+          # ⚠️ 关键修复：动态定位 java 源码根目录，避免硬编码模块名
+          # 优先查找包含 ani/rss 包结构的 src 目录
+          SRC_ROOT=$(find . -type d -path "*/src/main/java/ani/rss" | head -n 1)
+          
+          if [ -z "$SRC_ROOT" ]; then
+            echo "❌ 未找到 ani/rss 源码目录，请检查上游仓库结构是否再次变更！"
+            exit 1
+          fi
+          
+          # 计算实际的 Java 源码根路径 (去掉 /ani/rss)
+          JAVA_SRC_DIR="${SRC_ROOT%/ani/rss}"
+          echo "📁 检测到源码根目录: $JAVA_SRC_DIR"
+          
+          # 1. 创建目标包目录并替换 AfdianService.java
+          TARGET_DIR="$JAVA_SRC_DIR/ani/rss/service"
+          mkdir -p "$TARGET_DIR"
+          
+          cat > "$TARGET_DIR/AfdianService.java" << 'JAVAEOF'
+          package ani.rss.service;
 
           import ani.rss.commons.GsonStatic;
           import ani.rss.entity.Config;
           import ani.rss.entity.web.Result;
           import ani.rss.util.basic.HttpReq;
+          import ani.rss.util.other.ConfigUtil;
           import cn.hutool.core.lang.Assert;
           import com.google.gson.JsonObject;
           import lombok.extern.slf4j.Slf4j;
+          import org.springframework.stereotype.Service;
 
           import java.util.Date;
 
           @Slf4j
-          public class AfdianUtil {
-              public static Result<Void> verifyNo(String no) {
+          @Service
+          public class AfdianService {
+              /**
+               * 检测爱发电订单
+               *
+               * @param no 订单号
+               * @return 结果
+               */
+              public Result<Void> verifyNo(String no) {
                   Assert.notBlank(no, "订单号为空");
                   return HttpReq.post("https://afdian.wushuo.top?out_trade_no=" + no)
                           .timeout(1000 * 5)
@@ -67,12 +92,17 @@ jobs:
                           });
               }
 
-              public static Boolean verifyExpirationTime() {
-                  return true;
+              /**
+               * 捐赠是否有效
+               *
+               * @return 是否有效
+               */
+              public Boolean verifyExpirationTime() {
+                return true;
               }
           }
           JAVAEOF
-          echo "✅ AfdianUtil.java 已替换"
+          echo "✅ AfdianService.java 已替换到: $TARGET_DIR/AfdianService.java"
 
           # 2. 清空 arm32v7 Dockerfile
           > docker/Dockerfile-arm32v7
