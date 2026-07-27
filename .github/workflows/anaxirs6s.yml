@@ -56,22 +56,40 @@ jobs:
           
           cat > "$TARGET_DIR/AfdianService.java" << 'JAVAEOF'
           package ani.rss.service;
-          
+
+          import ani.rss.entity.Config;
           import ani.rss.entity.web.Result;
-          import cn.hutool.core.lang.Assert;
+          
+          import ani.rss.util.other.ConfigUtil;
           import lombok.extern.slf4j.Slf4j;
           import org.springframework.stereotype.Service;
+          
           import java.util.Date;
           
           @Slf4j
           @Service
           public class AfdianService {
+              /**
+               * 检测爱发电订单
+               *
+               * @param no 订单号
+               * @return 结果
+               */
               public Result<Void> verifyNo(String no) {
                   return Result.success();
               }
           
+              /**
+               * 捐赠是否有效
+               *
+               * @return 是否有效
+               */
               public Boolean verifyExpirationTime() {
-                return true;
+                  Config config = ConfigUtil.CONFIG;
+                  Long expirationTime = config.getExpirationTime();
+          
+                  long time = new Date().getTime();
+                  return time < expirationTime;
               }
           }
 
